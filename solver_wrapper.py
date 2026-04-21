@@ -2,6 +2,8 @@
 
 import asyncio
 import json
+import tempfile
+import os
 from typing import AsyncGenerator, Optional, List, Set, Dict
 from fastapi.sse import ServerSentEvent
 
@@ -14,12 +16,16 @@ from models import (
 )
 
 try:
-    from stackweave.solver import Solver, ProgressReporter
+    from stackweave.solver import Solver, ProgressReporter, Constraint, ConstraintSet
+    from stackweave import VersionRange
     from stackweave.parsers import parse_manifest
-    from stackweave.lockfile import generate_lockfile
+    from stackweave.lockfile import LockfileGenerator
+    from packaging.specifiers import SpecifierSet
     HAS_STACKWEAVE = True
-except ImportError:
+    print("✓ Stackweave imported successfully in solver_wrapper")
+except ImportError as e:
     HAS_STACKWEAVE = False
+    print(f"✗ Failed to import stackweave: {e}")
 
 
 async def solve_manifest(
@@ -124,6 +130,38 @@ async def solve_manifest(
         )
 
 
+def _normalize_version_spec(version_spec: str) -> str:
+    """
+    Normalize a version spec to be compatible with packaging.SpecifierSet.
+
+    Handles:
+    - Bare package names (e.g., "requests" → "")
+    - Wildcards (e.g., "requests*" → "")
+    - Wildcard suffixes (e.g., ">=2.0.*" → ">=2.0.0")
+
+    Args:
+        version_spec: The version specification string
+
+    Returns:
+        A normalized spec string compatible with SpecifierSet
+    """
+    spec = version_spec.strip()
+
+    # Remove trailing wildcards (e.g., "requests*" → "")
+    spec = spec.rstrip('*')
+
+    # Replace wildcard suffixes (e.g., ">=2.0.*" → ">=2.0.0")
+    if '.*' in spec:
+        spec = spec.replace('.*', '.0')
+
+    # If only an operator is left (e.g., ">=", "<"), it's invalid
+    # Return empty string for any spec, which means "any version"
+    if not spec or spec in ['>=', '<=', '==', '!=', '~=', '>', '<']:
+        return ''
+
+    return spec
+
+
 def _run_solver(manifest_text: str, manifest_type: str) -> Dict:
     """
     Run the solver synchronously (to be called in executor).
@@ -137,10 +175,55 @@ def _run_solver(manifest_text: str, manifest_type: str) -> Dict:
     - error: Optional[str]
     """
     try:
-        # Parse manifest
-        parsed = parse_manifest(manifest_text, manifest_type)
-        constraint_sets = parsed["constraint_sets"]
-        root_requirements = parsed["root_requirements"]
+        # Parse manifest: write text to temp file since parse_manifest expects a file path
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+            f.write(manifest_text)
+            temp_path = f.name
+
+        try:
+            parsed = parse_manifest(temp_path)
+
+            # Build root_requirements as a set of package names
+            root_requirements = {dep.name for dep in parsed.dependencies}
+
+            # Build constraint_sets from dependencies
+            constraint_sets = {}
+            for dep in parsed.dependencies:
+                # Normalize version spec to handle wildcards and invalid specs
+                normalized_spec = _normalize_version_spec(dep.version_spec)
+
+                # Create a VersionRange from the normalized spec
+                try:
+                    spec_set = SpecifierSet(normalized_spec) if normalized_spec else SpecifierSet("")
+                except Exception as e:
+                    print(f"Warning: Could not parse version spec '{dep.version_spec}': {e}")
+                    # Fallback to any version
+                    spec_set = SpecifierSet("")
+
+                version_range = VersionRange(
+                    specifier_set=spec_set,
+                    original_spec=dep.version_spec
+                )
+
+                # Create a Constraint for this package
+                constraint = Constraint(
+                    package=dep.name,
+                    version_range=version_range,
+                    markers=None,
+                    extras=dep.extras or []
+                )
+
+                # Create or update ConstraintSet for this package
+                if dep.name not in constraint_sets:
+                    constraint_sets[dep.name] = ConstraintSet(
+                        package=dep.name,
+                        constraints=[constraint]
+                    )
+                else:
+                    constraint_sets[dep.name].constraints.append(constraint)
+
+        finally:
+            os.unlink(temp_path)
 
         # Create and run solver
         solver = Solver(timeout=300.0)
@@ -154,7 +237,8 @@ def _run_solver(manifest_text: str, manifest_type: str) -> Dict:
 
         if result.success and result.solution:
             # Generate lockfile
-            lockfile = generate_lockfile(result.solution)
+            lockfile_gen = LockfileGenerator()
+            lockfile = lockfile_gen.generate(result.solution)
 
             return {
                 "success": True,

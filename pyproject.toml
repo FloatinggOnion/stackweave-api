@@ -18,6 +18,7 @@ dependencies = [
     "pydantic>=2.0.0",
     "python-multipart>=0.0.6",
     "aiofiles>=23.0.0",
+    "stackweave @ file:///Users/paul/Documents/programming/knot/knot-cli",
 ]
 
 [project.optional-dependencies]

@@ -1,6 +1,0 @@
-pyproject.toml
-stackweave_api.egg-info/PKG-INFO
-stackweave_api.egg-info/SOURCES.txt
-stackweave_api.egg-info/dependency_links.txt
-stackweave_api.egg-info/requires.txt
-stackweave_api.egg-info/top_level.txt
