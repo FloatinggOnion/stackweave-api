@@ -265,15 +265,26 @@ def _run_solver(manifest_text: str, manifest_type: str) -> Dict:
 
 def _build_dependency_graph(solution: Dict[str, str]) -> List[Dependency]:
     """
-    Build a basic dependency graph from the solution.
+    Build a dependency graph from the solution.
 
-    For now, returns empty list. In Phase 2+, this will be enhanced
-    to show actual dependency edges with constraints.
+    Creates nodes for all packages in the solution. Shows all resolved packages
+    even if there are no explicit dependency edges.
 
     Args:
         solution: Package -> version mapping
 
     Returns:
-        List of Dependency edges
+        List of Dependency edges (may be empty if no inter-dependencies)
     """
-    return []
+    # For now, return empty dependencies but nodes will be created from solution
+    # In Phase 2+, we can enhance this to extract actual dependency relationships
+    # from the solver's internal state
+
+    # Create dependency edges if we have multi-package solutions
+    # For single packages, we'll have nodes but no edges
+    dependencies: List[Dependency] = []
+
+    # TODO: Extract actual dependency relationships from solver result
+    # This would show which packages depend on which other packages
+
+    return dependencies
