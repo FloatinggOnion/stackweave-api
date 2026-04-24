@@ -7,7 +7,7 @@ from fastapi.responses import StreamingResponse
 from fastapi.sse import ServerSentEvent
 from pydantic import ValidationError
 
-from models import SolveRequest, ManifestType, ErrorEvent
+from solver_models import SolveRequest, ManifestType, ErrorEvent
 from solver_wrapper import solve_manifest
 
 router = APIRouter()
