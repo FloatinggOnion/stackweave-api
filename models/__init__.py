@@ -1,6 +1,6 @@
 """Pydantic models for Stackweave API."""
 
-from stackweave_api.models.templates import (
+from models.templates import (
     Template,
     TemplateMetadata,
     WorkflowDefinition,
