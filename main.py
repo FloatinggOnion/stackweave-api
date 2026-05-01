@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 
 from routes import router
 from routes.templates import router as templates_router
+from routes.templates_ui import router as templates_ui_router
 
 # Create FastAPI app
 app = FastAPI(
@@ -30,6 +31,9 @@ app.include_router(router)
 
 # Include templates router (Phase 7 - template validation endpoints)
 app.include_router(templates_router)
+
+# Include templates UI router (Phase 11 - template discovery endpoints)
+app.include_router(templates_ui_router)
 
 
 @app.get("/")
